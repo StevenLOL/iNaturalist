@@ -48,8 +48,8 @@ if __name__ == "__main__":
     # when training comes to 10th and 20th epoch
 	# see http://mxnet.io/how_to/finetune.html and Mu's thesis
     # http://www.cs.cmu.edu/~muli/file/mu-thesis.pdf 
-    parser.set_defaults(image_shape='3,320,320', num_epochs=30,
-                        lr=.01, lr_step_epochs='10,20', wd=0, mom=0)
+    parser.set_defaults(image_shape='3,320,320', num_epochs=50,
+                        lr=.01, lr_step_epochs='10,20,30,40', wd=0, mom=0, top_k = 3)
 
     args = parser.parse_args()
 
@@ -58,9 +58,11 @@ if __name__ == "__main__":
     
 	# get the pretrained resnet 152 from official MXNet model zoo
 	# 1k imagenet pretrained
-    #get_model('http://data.mxnet.io/models/imagenet/resnet/152-layers/resnet-152', 0)
+        #get_model('http://data.mxnet.io/models/imagenet/resnet/152-layers/resnet-152', 0)
 	# 11k imagenet resnet 152 has stronger classification power
-     get_model('http://data.mxnet.io/models/imagenet-11k/resnet-152/resnet-152', 0)
+    #get_model('http://data.mxnet.io/models/imagenet-11k/resnet-152/resnet-152', 0)
+    #prefix = 'model/resnet-152'
+    get_model('http://data.mxnet.io/models/imagenet-11k-place365-ch/', 0)
     prefix = 'model/resnet-152'
     epoch = 0
     sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, epoch)

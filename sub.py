@@ -56,7 +56,8 @@ def oversample(images, crop_dims):
     # cv2.waitKey()
     return crops
 
-prefix = 'model/iNat-resnet-152'
+#prefix = 'model/Scence-resnet-152-365'
+prefix = 'model/Scence-resnet-152'
 epoch = int(sys.argv[1]) #check point step
 gpu_id = int(sys.argv[2]) #GPU ID for infer
 ctx = mx.gpu(gpu_id)
@@ -64,100 +65,34 @@ sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, epoch)
 arg_params, aux_params = ch_dev(arg_params, aux_params, ctx)
 
 
-ann_file = 'data/test2017.json'
+ann_file = 'data/scene_validation_20170908.json'
 print('Loading annotations from: ' + os.path.basename(ann_file))
 with open(ann_file) as data_file:
     ann_data = json.load(data_file)
 
-imgs = [aa['file_name'] for aa in ann_data['images']]
-im_ids = [aa['id'] for aa in ann_data['images']]
-if 'annotations' in ann_data.keys():
-    # if we have class labels
-    classes = [aa['category_id'] for aa in ann_data['annotations']]
-else:
-    # otherwise dont have class info so set to 0
-    classes = [0]*len(im_ids)
+imgs = [aa['image_id'] for aa in ann_data]
 
-idx_to_class = {cc['id']: cc['name'] for cc in ann_data['categories']}
+classes = [0]*len(imgs)
 
+#idx_to_class = {cc['id']: cc['name'] for cc in ann_data['categories']}
 
+IMAGE_DIR="data/scene_validation_20170908/"
 
 top1_acc = 0
 top5_acc = 0
 cnt = 0
-img_sz = 360
-crop_sz = 320
+img_sz = 450
+crop_sz = 400
 
-preds = []
-im_idxs = []
-batch_sz = 256
-input_blob = np.zeros((batch_sz,3,crop_sz,crop_sz))
-idx = 0
-num_batches = int(len(imgs) / batch_sz)
+result = []
 
-for batch_head in range(0, batch_sz*num_batches, batch_sz):
-    #print batch_head
-    for index in range(batch_head, batch_head+batch_sz):
-	img_name = imgs[index]
+#for index in range(batch_sz*num_batches, len(imgs)):
+for index in range(0, len(imgs)):
+        img_name = imgs[index]
         label = str(classes[index])
-        im_id = str(im_ids[index])
-        im_idxs.append(int(im_id))
+
         cnt += 1
-        img_full_name = 'data/test2017/' + img_name
-        img = cv2.cvtColor(cv2.imread(img_full_name), cv2.COLOR_BGR2RGB)
-        img = np.float32(img)
-
-        rows, cols = img.shape[:2]
-        if cols < rows:
-            resize_width = img_sz
-            resize_height = resize_width * rows / cols;
-        else:
-            resize_height = img_sz
-            resize_width = resize_height * cols / rows;
-
-        img = cv2.resize(img, (resize_width, resize_height), interpolation=cv2.INTER_CUBIC)
-
-	h, w, _ = img.shape
-
-        x0 = int((w - crop_sz) / 2)
-        y0 = int((h - crop_sz) / 2)
-        img = img[y0:y0+crop_sz, x0:x0+crop_sz]
-
-        img = np.swapaxes(img, 0, 2)
-        img = np.swapaxes(img, 1, 2)  # change to r,g,b order
-        input_blob[idx,:,:,:] = img
-        idx += 1
-	#print(idx)
-
-    idx = 0
-
-
-    arg_params["data"] = mx.nd.array(input_blob, ctx)
-    arg_params["softmax_label"] = mx.nd.empty((batch_sz,), ctx)
-    exe = sym.bind(ctx, arg_params ,args_grad=None, grad_req="null", aux_states=aux_params)
-    exe.forward(is_train=False)
-    net_out = exe.outputs[0].asnumpy()
-
-    input_blob = np.zeros((batch_sz,3,crop_sz,crop_sz))
-
-    for bz in range(batch_sz):
-	probs = net_out[bz,:]
-    	score = np.squeeze(probs)
-
-        sort_index = np.argsort(score)[::-1]
-        top_k = sort_index[0:5]
-        preds.append(top_k.astype(np.int))
-	print(preds[-1], batch_head+bz)
-
-
-
-for index in range(batch_sz*num_batches, len(imgs)):
-	img_name = imgs[index]
-        label = str(classes[index])
-        im_id = str(im_ids[index])
-        im_idxs.append(int(im_id))
-        cnt += 1
-        img_full_name = 'data/test2017/' + img_name
+        img_full_name = IMAGE_DIR + img_name
         img = cv2.cvtColor(cv2.imread(img_full_name), cv2.COLOR_BGR2RGB)
         img = np.float32(img)
 
@@ -192,22 +127,19 @@ for index in range(batch_sz*num_batches, len(imgs)):
         score = np.squeeze(probs.mean(axis=0))
 
         sort_index = np.argsort(score)[::-1]
-        top_k = sort_index[0:5]
+        top_k = sort_index[0:3]
 	#print(top_k)
 
-        preds.append(top_k.astype(np.int))
-	print(preds[-1], im_idxs[-1])
-	#print(top_k.astype(np.int), int(im_id))
-	#print(preds[index], im_idxs[index])
+        temp_dict = {}
 
-im_idxs = np.hstack(im_idxs)
-preds = np.vstack(preds)
+        temp_dict['label_id'] = top_k.tolist()
+        temp_dict['image_id'] = img_name
+        result.append(temp_dict)
 
 
-with open("submission_epoch_%d.csv"%(epoch), 'w') as opfile:
-	opfile.write('id,predicted\n')
-        for ii in range(len(im_idxs)):
-        	opfile.write(str(im_idxs[ii]) + ',' + ' '.join(str(x) for x in preds[ii,:])+'\n')
+with open('submit.json', 'w') as f:
+    json.dump(result, f)
+    print('write result json, num is %d' % len(result))
 
 
 
